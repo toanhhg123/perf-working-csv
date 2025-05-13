@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: performance-export
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/postgres
+    username: root
+    password: root
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 2
+      idle-timeout: 30000
+      pool-name: HikariInventory
+      connection-timeout: 30000
+  jpa:
+    show-sql: true
+    open-in-view: true
+    properties:
+      hibernate:
+        format_sql: true
+        generate_statistics: true
+    hibernate:
+      ddl-auto: update
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: user-batch-consumer
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      client-id: ${CONSUMER_ID:producer}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      properties:
+        max.request.size: 5242880
+        fetch.message.max.bytes: 5242880
+        max.partition.fetch.bytes: 5242880
+  
+  servlet:
+    multipart:
+      max-file-size: 1000MB
+      max-request-size: 1000MB
+
+app:
+  kafka:
+    user-topic: users-batch
+
+server:
+  port: ${PORT:8080}

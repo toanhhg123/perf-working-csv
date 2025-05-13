@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option java_package = "com.app.performanceexport";
+option java_outer_classname = "UserProto";
+
+message User {
+  string name = 1;
+  string avatar = 2;
+  int32 level = 3;
+  string sex = 4;
+  string sign = 5;
+  int32 vip_type = 6;
+  int32 vip_status = 7;
+  int32 vip_role = 8;
+  int32 archive = 9;
+  int32 fans = 10;
+  int32 friend = 11;
+  int32 like_num = 12;
+  int32 is_senior = 13;
+}
+
+message UserBatch {
+  string batch_id = 1;
+  repeated User users = 2;
+}
