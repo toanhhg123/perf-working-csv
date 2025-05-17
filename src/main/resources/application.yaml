@@ -6,12 +6,6 @@ spring:
     username: root
     password: root
     driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 20
-      minimum-idle: 2
-      idle-timeout: 30000
-      pool-name: HikariInventory
-      connection-timeout: 30000
   jpa:
     show-sql: true
     open-in-view: true
@@ -21,6 +15,11 @@ spring:
         generate_statistics: true
     hibernate:
       ddl-auto: update
+
+  batch:
+    jdbc:
+      initialize-schema: always
+      platform: postgresql
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -48,3 +47,9 @@ app:
 
 server:
   port: ${PORT:8080}
+
+logging:
+  level:
+    org:
+      springframework:
+        batch: DEBUG

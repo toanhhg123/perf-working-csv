@@ -4,8 +4,10 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,11 +32,15 @@ import static java.lang.Long.parseLong;
 @Slf4j
 public class CsvService {
     private static final int BATCH_SIZE = 5000;
-    private static final int THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors();
-    private final JdbcTemplate jdbcTemplate;
 
-    public CsvService(JdbcTemplate jdbcTemplate) {
+    private final JdbcTemplate jdbcTemplate;
+    private final ThreadPoolTaskExecutor taskExecutor;
+
+
+    public CsvService(JdbcTemplate jdbcTemplate,
+                      @Qualifier("csvExecutor") Executor executor) {
         this.jdbcTemplate = jdbcTemplate;
+        this.taskExecutor = (ThreadPoolTaskExecutor) executor;
     }
 
     public void readLargeCSVWithStream(MultipartFile file) throws IOException {
@@ -46,23 +52,21 @@ public class CsvService {
         AtomicInteger submittedTasks = new AtomicInteger(0);
         List<Exception> taskExceptions = Collections.synchronizedList(new ArrayList<>());
 
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
-        CompletionService<Void> completionService = new ExecutorCompletionService<>(executor);
-        Semaphore semaphore = new Semaphore(THREAD_POOL_SIZE);
+        ExecutorService executorService = taskExecutor.getThreadPoolExecutor();
+        CompletionService<Void> completionService = new ExecutorCompletionService<>(executorService);
+        Semaphore semaphore = new Semaphore(taskExecutor.getCorePoolSize());
 
-        try {
-            CsvParser parser = getCsvParser(file);
-            processRows(parser, completionService, semaphore, totalInserted, malformedCount, submittedTasks);
-            waitForAllTasks(completionService, submittedTasks.get(), taskExceptions);
-        } finally {
-            executor.shutdown();
-        }
+        // process rows
+        CsvParser parser = getCsvParser(file);
+        processRows(parser, completionService, semaphore, totalInserted, malformedCount, submittedTasks);
+        waitForAllTasks(completionService, submittedTasks.get(), taskExceptions);
+
 
         long duration = System.currentTimeMillis() - startTime;
         log.info("✅ DONE. Inserted {} rows in {} ms (~{} sec). Skipped {} malformed rows. Failed batches: {}",
                 totalInserted.get(), duration, duration / 1000, malformedCount.get(), taskExceptions.size());
     }
-
+    
     private void processRows(
             CsvParser parser,
             CompletionService<Void> completionService,

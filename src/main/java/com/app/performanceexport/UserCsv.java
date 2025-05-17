@@ -4,9 +4,11 @@ package com.app.performanceexport;
 import com.opencsv.bean.CsvBindByName;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 public class UserCsv {
     @CsvBindByName(column = "uid")
     private Long uid;
