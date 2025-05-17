@@ -10,12 +10,13 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ItemStreamReader;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +34,14 @@ import javax.sql.DataSource;
 public class BatchConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<User> userUnivocityReader(
+            @Value("#{jobParameters['filePath']}") String filePath
+    ) {
+        return new UnivocityCsvItemReader(filePath);
+    }
 
     @Bean
     @StepScope
@@ -56,10 +65,10 @@ public class BatchConfig {
                 .build();
     }
 
-    @Bean
+    @Bean(name = "userImportTaskExecutor")
     public TaskExecutor taskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(10);       // number of worker threads
+        executor.setCorePoolSize(10);
         executor.setMaxPoolSize(20);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("user-import-");
@@ -69,36 +78,30 @@ public class BatchConfig {
 
     @Bean
     public JdbcBatchItemWriter<User> jdbcWriter(DataSource dataSource) {
+        final String sql = """
+                INSERT INTO tbl_user (name, avatar, level, sex, sign, vip_type, vip_status, vip_role, archive, fans, friend, like_num, is_senior)
+                VALUES (:name, :avatar, :level, :sex, :sign, :vipType, :vipStatus, :vipRole, :archive, :fans, :friend, :likeNum, :isSenior)
+                """;
         return new JdbcBatchItemWriterBuilder<User>()
                 .dataSource(dataSource)
-                .sql("""
-                            INSERT INTO tbl_user (
-                                name, avatar, level, sex, sign,
-                                vip_type, vip_status, vip_role, archive,
-                                fans, friend, like_num, is_senior
-                            )
-                            VALUES (
-                                :name, :avatar, :level, :sex, :sign,
-                                :vipType, :vipStatus, :vipRole, :archive,
-                                :fans, :friend, :likeNum, :isSenior
-                            )
-                        """)
+                .sql(sql)
                 .beanMapped()
                 .build();
     }
 
     @Bean
     public Step userImportStep(
-            ItemReader<User> reader,
+            @Qualifier("userUnivocityReader") ItemStreamReader<User> reader,
             JdbcBatchItemWriter<User> writer
     ) {
         return new StepBuilder("userImportStep", jobRepository)
-                .<User, User>chunk(50000, transactionManager)
+                .<User, User>chunk(5000, transactionManager)
                 .taskExecutor(taskExecutor())
                 .reader(reader)
                 .writer(writer)
                 .build();
     }
+
 
     @Bean
     public Job importUserJob(Step userImportStep, TempFileCleanupListener listener) {
